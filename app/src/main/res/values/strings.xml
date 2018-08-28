@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Face_Recognition</string>
+    <string name="eigenfaces">Eigen Faces</string>
+    <string name="flip">Flip</string>
+</resources>

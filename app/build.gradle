@@ -1,0 +1,83 @@
+apply plugin: 'com.android.application'
+
+android {
+    compileSdkVersion 26
+    defaultConfig {
+        applicationId "com.developer.iamsafi.face_recognition"
+        minSdkVersion 16
+        targetSdkVersion 26
+        versionCode 1
+        versionName "1.0"
+        vectorDrawables.useSupportLibrary = true
+        ndk {
+            stl 'gnustl_static'
+            cFlags '-std=gnu++11 -fexceptions -frtti'
+        }
+        setProperty('archivesBaseName', rootProject.name + '-' + defaultConfig.versionName)
+    }
+    //============
+    splits {
+        abi {
+            enable true
+            reset()
+            universalApk true
+            include 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
+    }
+    project.ext.abiCodes = ['armeabi-v7a':1, 'arm64-v8a':2, 'x86':3, 'x86_64':4]
+    applicationVariants.all { variant ->
+        variant.outputs.each { output ->
+            def baseAbiVersionCode = project.ext.abiCodes.get(output.getFilter(com.android.build.OutputFile.ABI))
+            // Because abiCodes.get() returns null for ABIs that are not mapped by ext.abiCodes,
+            // the following code does not override the version code for universal APKs.
+            if (baseAbiVersionCode != null) {
+                output.versionCodeOverride = baseAbiVersionCode * 1000000 + variant.versionCode
+            }
+        }
+        if (variant.getBuildType().isMinifyEnabled()) {
+            variant.assemble.doLast {
+                variant.mappingFile.renameTo(variant.mappingFile.parent +
+                        "/$archivesBaseName-$variant.baseName-mapping.txt")
+            }
+        }
+    }
+    signingConfigs {
+        release
+    }
+    //===============
+    buildTypes {
+        //==========================
+        debug {
+            jniDebuggable true
+            externalNativeBuild {
+                ndkBuild {
+                    arguments 'NDK_DEBUG=1', 'NDEBUG=null'
+                }
+            }
+        }
+        //=====================
+        release {
+            shrinkResources true
+            minifyEnabled true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+    externalNativeBuild {
+        ndkBuild {
+            path 'src/main/cpp/Android.mk'
+        }
+    }
+    lintOptions {
+        abortOnError false
+    }
+}
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'com.android.support:appcompat-v7:26.1.0'
+    implementation 'com.google.android.gms:play-services-vision:10.2.6'
+    testImplementation 'junit:junit:4.12'
+    androidTestImplementation 'com.android.support.test:runner:1.0.2'
+    androidTestImplementation 'com.android.support.test.espresso:espresso-core:3.0.2'
+    compile project(path: ':opencv')
+}
