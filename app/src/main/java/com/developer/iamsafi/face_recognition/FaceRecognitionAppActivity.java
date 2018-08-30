@@ -71,6 +71,7 @@ import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -91,7 +92,7 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
     private CameraBridgeViewBase mOpenCvCameraView;
     private Mat mRgba, mGray;
     private Toast mToast;
-    private boolean useEigenfaces=true;
+    private boolean useEigenfaces = true;
 
     private float faceThreshold, distanceThreshold;
     private int maximumImages;
@@ -100,9 +101,12 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
     private Toolbar mToolbar;
     private NativeMethods.TrainFacesTask mTrainFacesTask;
     //===========Values
-    private int faces_value=5;
-    private float face_threshold=0.175f;
-    private float distance_threshold=0.216f;
+    private int faces_value = 10;
+    private float face_threshold = 0.100f;
+    private float distance_threshold = 0.200f;
+    private Mat origMat;
+    private Mat origMat1;
+
     //=======================
     private void showToast(String message, int duration) {
         if (duration != Toast.LENGTH_SHORT && duration != Toast.LENGTH_LONG)
@@ -116,6 +120,7 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
     private void addLabel(String string) {
         String label = string.substring(0, 1).toUpperCase(Locale.US) + string.substring(1).trim().toLowerCase(Locale.US); // Make sure that the name is always uppercase and rest is lowercase
         imagesLabels.add(label); // Add label to list of labels
+        Log.i(TAG, "Labels Added=" + imagesLabels.size());
         Log.i(TAG, "Label: " + label);
 
         trainFaces(); // When we have finished setting the label, then retrain faces
@@ -123,7 +128,8 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
 
     /**
      * Train faces using stored images.
-     * @return  Returns false if the task is already running.
+     *
+     * @return Returns false if the task is already running.
      */
     private boolean trainFaces() {
         if (images.isEmpty())
@@ -137,16 +143,18 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
         Mat imagesMatrix = new Mat((int) images.get(0).total(), images.size(), images.get(0).type());
         for (int i = 0; i < images.size(); i++)
             images.get(i).copyTo(imagesMatrix.col(i)); // Create matrix where each image is represented as a column vector
-
+        Log.i(TAG, "Channel of input is =" + imagesMatrix.channels());
+        Log.i(TAG, "Columbns of input is =" + imagesMatrix.cols());
+        Log.i(TAG, "Columbns of input is =" + imagesMatrix.type());
         Log.i(TAG, "Images height: " + imagesMatrix.height() + " Width: " + imagesMatrix.width() + " total: " + imagesMatrix.total());
 
         // Train the face recognition algorithms in an asynchronous task, so we do not skip any frames
 
-            Log.i(TAG, "Training Eigenfaces");
-            showToast("Training " + getResources().getString(R.string.eigenfaces), Toast.LENGTH_SHORT);
+        Log.i(TAG, "Training Eigenfaces");
+        showToast("Training " + getResources().getString(R.string.eigenfaces), Toast.LENGTH_SHORT);
 
-            mTrainFacesTask = new NativeMethods.TrainFacesTask(imagesMatrix, trainFacesTaskCallback);
-            mTrainFacesTask.execute();
+        mTrainFacesTask = new NativeMethods.TrainFacesTask(imagesMatrix, trainFacesTaskCallback);
+        mTrainFacesTask.execute();
 
         return true;
     }
@@ -187,9 +195,10 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
             Arrays.sort(uniqueLabels); // Sort labels alphabetically
             final ArrayAdapter<String> arrayAdapter = new ArrayAdapter<String>(FaceRecognitionAppActivity.this, android.R.layout.simple_list_item_1, uniqueLabels) {
                 @Override
-                public @NonNull View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
+                public @NonNull
+                View getView(int position, @Nullable View convertView, @NonNull ViewGroup parent) {
                     TextView textView = (TextView) super.getView(position, convertView, parent);
-                        textView.setTextSize(18); // Increase text size a little bit
+                    textView.setTextSize(18); // Increase text size a little bit
                     return textView;
                 }
             };
@@ -298,21 +307,39 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
                     showToast("Still training...", Toast.LENGTH_SHORT);
                     return;
                 }
-                Bitmap scale = Bitmap.createBitmap(mGray.width(), mGray.height(), Bitmap.Config.ARGB_8888);
-                Utils.matToBitmap(mGray,scale);
-                FaceOverLay faceOverLay = new FaceOverLay(FaceRecognitionAppActivity.this);
-                scale=faceOverLay.setBitmap(scale);
-                if(scale!=null) {
-                    Log.i("check", "Bimap is converted");
-                    mGray = new Mat(scale.getHeight(), scale.getWidth(), CvType.CV_8U);
-                    //mGray.convertTo(mGray, CV_8U, 1 / 256.0);
-                    Log.i(TAG,"Depth is "+mGray.depth());
-                    Bitmap bmp32 = scale.copy(Bitmap.Config.ARGB_8888, true);
-                    Utils.bitmapToMat(bmp32, mGray);
-                }
-                else
-                    Toast.makeText(getApplicationContext(),"Bimap is null",Toast.LENGTH_SHORT).show();
 
+//                mCacheBitmap = Bitmap.createBitmap(mFrameWidth, mFrameHeight, Bitmap.Config.ARGB_8888);
+                /*if (images.size() < maximumImages) {
+                    Bitmap scale = Bitmap.createBitmap(mRgba.width(), mRgba.height(), Bitmap.Config.ARGB_8888);
+                    Utils.matToBitmap(mRgba, scale);
+                    FaceOverLay faceOverLay = new FaceOverLay(FaceRecognitionAppActivity.this);
+                    scale = faceOverLay.setBitmap(scale);
+                    Log.i(TAG, "Picture of face is " + (scale != null));
+                    if (scale != null) {
+                        Log.i(TAG, "Bimap is converted");
+                        //mGray = new Mat(scale.getHeight(), scale.getWidth(), CvType.CV_8U);
+                        //mGray.convertTo(mGray, CV_8U, 1 / 256.0);
+                        Log.i(TAG, "Depth is " + mGray.depth());
+                        // Bitmap bmp32 = scale.copy(Bitmap.Config.ARGB_8888, true);
+
+
+                        //Bitmap bmp32 = scale.copy(Bitmap.Config.ARGB_8888, true);
+                        //Utils.bitmapToMat(bmp32,mGray);
+                        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                        scale.compress(Bitmap.CompressFormat.PNG, 100, byteArrayOutputStream);
+                        byte[] byteArray = byteArrayOutputStream.toByteArray();
+                        origMat = new Mat(mRgba.height(), mRgba.width(), CvType.CV_8U);
+                        origMat.put(0, 0, byteArray);
+                        origMat1 = new Mat(mGray.height(), mGray.width(), CvType.CV_8UC1);
+                        //Utils.bitmapToMat(scale, origMat1);
+//                        origMat.convertTo(origMat,CV_8U);
+                        Imgproc.cvtColor(origMat, origMat1, Imgproc.COLOR_RGB2GRAY);
+                        Log.i(TAG, "Gray Image Type is " + origMat1.type());
+                        Log.i(TAG, "Gray Image Channels is " + origMat1.channels());
+
+                    } else
+                        Toast.makeText(getApplicationContext(), "Bimap is null", Toast.LENGTH_SHORT).show();
+                }*/
                 Log.i(TAG, "Gray height: " + mGray.height() + " Width: " + mGray.width() + " total: " + mGray.total());
                 if (mGray.total() == 0)
                     return;
@@ -322,21 +349,20 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
 
                 Mat image = mGray.reshape(0, (int) mGray.total()); // Create column vector
                 Log.i(TAG, "Vector height: " + image.height() + " Width: " + image.width() + " total: " + image.total());
-                Log.i(TAG,"Test Images="+images.size()+"/"+maximumImages);
-                /*Bitmap scale1 = Bitmap.createBitmap(mGray.width(), mGray.height(), Bitmap.Config.ARGB_8888);
-                ImageView v1=findViewById(R.id.back);
-                Utils.matToBitmap(mGray,scale1);
+                Log.i(TAG, "Test Images=" + images.size() + "/" + maximumImages);
+                /*Bitmap scale1 = Bitmap.createBitmap(origMat1.width(), origMat1.height(), Bitmap.Config.ARGB_8888);
+                ImageView v1 = findViewById(R.id.back);
+                Utils.matToBitmap(origMat1, scale1);
                 v1.setImageBitmap(scale1);*/
-                if(images.size() < maximumImages) {
+                //Log.i(TAG,"image Type is "+origMat.type());
+                if (images.size() < maximumImages) {
                     images.add(image); // Add current image to the array
                     showLabelsDialog();
-                }
-                else if (images.size() > maximumImages) {
+                } else if (images.size() > maximumImages) {
                     images.remove(0); // Remove first image
                     imagesLabels.remove(0); // Remove first label
                     Log.i(TAG, "The number of images is limited to: " + images.size());
-                }
-                else if (images.size()==maximumImages) {
+                } else if (images.size() == maximumImages) {
                     Log.i("check", "Calculating Distance");
                     // Calculate normalized Euclidean distance
                     mMeasureDistTask = new NativeMethods.MeasureDistTask(true, measureDistTaskCallback);
@@ -416,13 +442,13 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
         // Read threshold values
         float progress = prefs.getFloat("faceThreshold", -1);
         if (progress != -1)
-            faceThreshold=face_threshold;
+            faceThreshold = face_threshold;
         progress = prefs.getFloat("distanceThreshold", -1);
         if (progress != -1)
-            distanceThreshold=distance_threshold;
-        int num=prefs.getInt("maximumImages", 0);
-        if(num==0)
-        maximumImages=faces_value;
+            distanceThreshold = distance_threshold;
+        int num = prefs.getInt("maximumImages", 0);
+        if (num == 0)
+            maximumImages = faces_value;
     }
 
     @Override
@@ -468,7 +494,7 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
                     images = tinydb.getListMat("images");
                     imagesLabels = tinydb.getListString("imagesLabels");
 
-                    Log.i(TAG, "Number of images: " + images.size()  + ". Number of labels: " + imagesLabels.size());
+                    Log.i(TAG, "Number of images: " + images.size() + ". Number of labels: " + imagesLabels.size());
                     if (!images.isEmpty()) {
                         trainFaces(); // Train images after they are loaded
                         Log.i(TAG, "Images height: " + images.get(0).height() + " Width: " + images.get(0).width() + " total: " + images.get(0).total());
@@ -560,8 +586,6 @@ public class FaceRecognitionAppActivity extends AppCompatActivity implements Cam
 
         mGray = mGrayTmp;
         //TODO: Here to convert
-
-
         mRgba = mRgbaTmp;
 
         return mRgba;
